@@ -48,7 +48,7 @@ fi
 # ── Arrancar backend en segundo plano ─────────────────────────────────────────
 info "Iniciando backend Flask..."
 cd "$BACKEND_DIR"
-nohup python3 app.py > "$LOG_FILE" 2>&1 &
+setsid nohup python3 app.py > "$LOG_FILE" 2>&1 &
 BACKEND_PID=$!
 echo "$BACKEND_PID" > "$PID_FILE"
 

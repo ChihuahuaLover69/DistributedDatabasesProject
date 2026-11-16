@@ -15,7 +15,13 @@
     <a href="#" class="nav-link active" data-section="clientes">Clientes</a>
     <a href="#" class="nav-link" data-section="tablas">Tablas</a>
   </div>
-  <div id="badge-nodo" class="badge-nodo">Cargando...</div>
+  <div class="navbar-right">
+    <button id="btn-tailscale" class="btn-tailscale" onclick="abrirModalTailscale()" title="Estado de Tailscale">
+      <span id="ts-dot" class="ts-dot ts-dot--unknown"></span>
+      <span id="ts-label">Tailscale</span>
+    </button>
+    <div id="badge-nodo" class="badge-nodo">Cargando...</div>
+  </div>
 </nav>
 
 <!-- ═══ SECCIÓN CLIENTES ═════════════════════════════════════════════════════ -->
@@ -185,6 +191,23 @@
         <button type="submit" class="btn btn-primary">Crear en todos los nodos</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ═══ MODAL — Estado Tailscale ════════════════════════════════════════════ -->
+<div id="modal-tailscale" class="modal-overlay hidden">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h3>Estado de Tailscale</h3>
+      <button class="modal-close" onclick="cerrarModal('modal-tailscale')">✕</button>
+    </div>
+    <div id="ts-modal-body" class="ts-modal-body">
+      <p class="empty">Consultando estado...</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="cargarTailscale()">↺ Actualizar</button>
+      <button class="btn btn-ghost" onclick="cerrarModal('modal-tailscale')">Cerrar</button>
+    </div>
   </div>
 </div>
 

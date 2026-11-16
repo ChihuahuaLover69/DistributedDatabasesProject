@@ -2,7 +2,7 @@
    app.js — Lógica principal del frontend distribuido
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const API = "http://localhost:5000";
+const API = "";
 
 /* ── Estado global ──────────────────────────────────────────────────────────── */
 let nodoLocal = null;          // {node_index, host, id_min, id_max, total_nodos}
@@ -58,6 +58,9 @@ async function inicializar() {
 
   // Listar clientes al iniciar
   await listarTodos();
+
+  // Cargar estado Tailscale en background (actualiza el botón en navbar)
+  cargarTailscale().catch(() => {});
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -503,6 +506,109 @@ function toast(msg, tipo = "ok") {
   el.textContent = msg;
   container.appendChild(el);
   setTimeout(() => el.remove(), 3500);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAILSCALE — Conectividad
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+async function cargarTailscale() {
+  const modalOpen = !document.getElementById("modal-tailscale").classList.contains("hidden");
+  if (modalOpen) {
+    document.getElementById("ts-modal-body").innerHTML = '<p class="empty">Consultando estado...</p>';
+  }
+  let data;
+  try {
+    const res = await fetch(`${API}/api/tailscale`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    data = json.data;
+  } catch (err) {
+    if (modalOpen) {
+      document.getElementById("ts-modal-body").innerHTML =
+        `<p class="empty" style="color:var(--danger)">Error: ${esc(String(err))}</p>`;
+    }
+    actualizarBotonTailscale("error");
+    return;
+  }
+
+  if (modalOpen) renderTailscaleModal(data);
+  // Actualizar el botón en la navbar
+  const allOnline = data.nodes.every(n => n.online);
+  const anyOnline = data.nodes.some(n => n.online);
+  if (!data.available || !data.running) {
+    actualizarBotonTailscale("error");
+  } else if (allOnline) {
+    actualizarBotonTailscale("ok");
+  } else if (anyOnline) {
+    actualizarBotonTailscale("partial");
+  } else {
+    actualizarBotonTailscale("error");
+  }
+}
+
+function actualizarBotonTailscale(estado) {
+  const dot = document.getElementById("ts-dot");
+  dot.className = `ts-dot ts-dot--${estado}`;
+  const labels = { ok: "Conectado", partial: "Parcial", error: "Desconectado", unknown: "Tailscale" };
+  document.getElementById("ts-label").textContent = labels[estado] || "Tailscale";
+}
+
+function renderTailscaleModal(data) {
+  const body = document.getElementById("ts-modal-body");
+  if (!data.available) {
+    body.innerHTML = `<p class="empty" style="color:var(--danger)">Tailscale no está instalado en este servidor.</p>`;
+    return;
+  }
+  if (!data.running) {
+    body.innerHTML = `<p class="empty" style="color:var(--danger)">Tailscale está instalado pero no está activo.<br>Ejecuta <code>tailscale up</code> para conectarte.</p>`;
+    return;
+  }
+
+  let html = `<p class="ts-section-title">Esta máquina</p>`;
+  html += `<div class="ts-info-row"><span>IP Tailscale</span><code>${esc(data.self_ip || "—")}</code></div>`;
+  html += `<div class="ts-info-row"><span>Estado</span><span style="color:var(--success);font-weight:600">● Activo</span></div>`;
+
+  html += `<p class="ts-section-title" style="margin-top:1rem">Nodos del sistema</p>`;
+  for (const node of data.nodes) {
+    const isSelf = node.host === data.self_ip;
+    let dotCls, badgeCls, badgeTxt;
+    if (isSelf) {
+      dotCls = "ts-node-dot--self"; badgeCls = "ts-node-badge--self"; badgeTxt = "Esta máquina";
+    } else if (node.online) {
+      dotCls = "ts-node-dot--online"; badgeCls = "ts-node-badge--online"; badgeTxt = "En línea";
+    } else {
+      dotCls = "ts-node-dot--offline"; badgeCls = "ts-node-badge--offline"; badgeTxt = "Desconectado";
+    }
+    html += `
+      <div class="ts-node-row">
+        <span class="ts-node-dot ${dotCls}"></span>
+        <span class="ts-node-name">${esc(node.hostname || `Nodo ${node.index}`)}</span>
+        <span class="ts-node-badge ${badgeCls}">${badgeTxt}</span>
+        <span class="ts-node-host">${esc(node.host)}</span>
+      </div>`;
+  }
+
+  if (data.peers && data.peers.length > 0) {
+    html += `<p class="ts-section-title" style="margin-top:1rem">Todos los peers Tailscale</p>`;
+    for (const p of data.peers) {
+      const online = p.online;
+      html += `
+        <div class="ts-node-row">
+          <span class="ts-node-dot ${online ? "ts-node-dot--online" : "ts-node-dot--offline"}"></span>
+          <span class="ts-node-name">${esc(p.hostname || "—")}</span>
+          <span class="ts-node-badge ${online ? "ts-node-badge--online" : "ts-node-badge--offline"}">${online ? "En línea" : "Desconectado"}</span>
+          <span class="ts-node-host">${esc((p.ips || [])[0] || "—")}</span>
+        </div>`;
+    }
+  }
+
+  body.innerHTML = html;
+}
+
+async function abrirModalTailscale() {
+  abrirModal("modal-tailscale");
+  await cargarTailscale();
 }
 
 /* ─── Arrancar ──────────────────────────────────────────────────────────────── */
