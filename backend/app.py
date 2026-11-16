@@ -4,6 +4,7 @@ from flask import Flask, send_from_directory
 from flask_cors import CORS
 
 from routes.clientes import bp_clientes
+from routes.diagnostico import bp_diagnostico
 from routes.direcciones import bp_direcciones
 from routes.tablas import bp_tablas
 from routes.tailscale import bp_tailscale
@@ -14,6 +15,7 @@ app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="/static")
 CORS(app)
 
 app.register_blueprint(bp_clientes)
+app.register_blueprint(bp_diagnostico)
 app.register_blueprint(bp_direcciones)
 app.register_blueprint(bp_tablas)
 app.register_blueprint(bp_tailscale)
