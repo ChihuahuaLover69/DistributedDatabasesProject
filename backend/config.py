@@ -10,14 +10,14 @@ NODES = [
     {
         "host": "100.120.137.4",
         "port": 3306,
-        "db": "tienda",
+        "db": "sucursal_morelia",
         "user": "Compañero",
         "password": "UnaContraseñaSegura123!",
     },
     {
         "host": "100.119.128.65",
         "port": 3306,
-        "db": "tienda",
+        "db": "suc_patzcuaro",
         "user": "Compañero",
         "password": "UnaContraseñaSegura123!",
     },

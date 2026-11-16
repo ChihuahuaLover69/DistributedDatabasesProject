@@ -67,13 +67,13 @@ for i in $(seq 1 20); do
 done
 
 # ── Abrir frontend en el navegador ────────────────────────────────────────────
-FRONTEND_URL="file://$FRONTEND_DIR/index.html"
+FRONTEND_URL="http://localhost:5000"
 
 if command -v xdg-open &>/dev/null; then
   info "Abriendo frontend en el navegador..."
-  xdg-open "$FRONTEND_URL" &
+  xdg-open "$FRONTEND_URL" >/dev/null 2>&1 &
 elif command -v open &>/dev/null; then
-  open "$FRONTEND_URL" &
+  open "$FRONTEND_URL" >/dev/null 2>&1 &
 else
   warn "No se pudo abrir el navegador automáticamente."
   warn "Abre manualmente: $FRONTEND_URL"
@@ -81,8 +81,7 @@ fi
 
 echo ""
 echo -e "  ${GREEN}Sistema corriendo${RESET}"
-echo -e "  Backend → ${YELLOW}http://localhost:5000${RESET}"
-echo -e "  Frontend → ${YELLOW}$FRONTEND_URL${RESET}"
+echo -e "  URL → ${YELLOW}http://localhost:5000${RESET}"
 echo -e "  Logs    → ${YELLOW}$LOG_FILE${RESET}"
 echo ""
 echo -e "  Para detener: ${YELLOW}bash stop.sh${RESET}"

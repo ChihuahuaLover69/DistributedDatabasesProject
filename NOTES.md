@@ -116,8 +116,8 @@ DistributedDatabasesProject/
 BLOCK_SIZE = 1500   # IDs por nodo
 
 NODES = [
-    {"host": "100.120.137.4",  "port": 3306, "db": "tienda", "user": "...", "password": "..."},
-    {"host": "100.119.128.65", "port": 3306, "db": "tienda", "user": "...", "password": "..."},
+    {"host": "100.120.137.4",  "port": 3306, "db": "sucursal_morelia", "user": "...", "password": "..."},
+    {"host": "100.119.128.65", "port": 3306, "db": "suc_patzcuaro",    "user": "...", "password": "..."},
 ]
 ```
 
