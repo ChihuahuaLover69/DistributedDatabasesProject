@@ -11,6 +11,7 @@ BACKEND_DIR="$SCRIPT_DIR/backend"
 FRONTEND_DIR="$SCRIPT_DIR/frontend"
 LOG_FILE="$SCRIPT_DIR/backend.log"
 PID_FILE="$SCRIPT_DIR/backend.pid"
+ENV_FILE="$SCRIPT_DIR/.env"
 
 # ── Colores ────────────────────────────────────────────────────────────────────
 GREEN="\033[0;32m"
@@ -28,10 +29,43 @@ if ! command -v python3 &>/dev/null; then
   exit 1
 fi
 
+# ── Verificar que existe el archivo .env ──────────────────────────────────────
+if [[ ! -f "$ENV_FILE" ]]; then
+  error "No se encontró el archivo .env"
+  echo ""
+  echo -e "  ${YELLOW}Solución:${RESET} copia la plantilla y rellena tus valores:"
+  echo -e "    cp .env.example .env"
+  echo -e "    nano .env   # (o el editor que prefieras)"
+  echo ""
+  echo -e "  Necesitas configurar:"
+  echo -e "    NODE0_HOST, NODE0_DB, NODE0_USER, NODE0_PASSWORD"
+  echo -e "    NODE1_HOST, NODE1_DB, NODE1_USER, NODE1_PASSWORD"
+  echo ""
+  exit 1
+fi
+
 # ── Verificar que las dependencias estén instaladas ────────────────────────────
 if ! python3 -c "import flask, pymysql, flask_cors" &>/dev/null; then
   warn "Dependencias no encontradas. Instalando desde requirements.txt..."
   pip install -r "$BACKEND_DIR/requirements.txt" --quiet
+fi
+
+# ── Verificar que la configuración es válida antes de arrancar ────────────────
+if ! python3 -c "
+import sys
+sys.path.insert(0, '$BACKEND_DIR')
+try:
+    from config import NODES, LOCAL_NODE_INDEX
+    if not NODES:
+        print('ERROR: No hay nodos configurados en .env')
+        sys.exit(1)
+    print(f'Configuración OK: {len(NODES)} nodo(s), nodo local: {LOCAL_NODE_INDEX}')
+except Exception as e:
+    print(f'ERROR en config.py: {e}')
+    sys.exit(1)
+" 2>&1; then
+  error "La configuración del backend tiene errores. Revisa tu archivo .env"
+  exit 1
 fi
 
 # ── Matar instancia anterior si existe ────────────────────────────────────────
@@ -52,15 +86,28 @@ setsid nohup python3 app.py > "$LOG_FILE" 2>&1 &
 BACKEND_PID=$!
 echo "$BACKEND_PID" > "$PID_FILE"
 
-# ── Esperar a que el servidor esté listo (máx. 10 s) ─────────────────────────
+# ── Esperar a que el servidor esté listo (máx. 15 s) ─────────────────────────
 info "Esperando que el backend esté listo..."
-for i in $(seq 1 20); do
+for i in $(seq 1 30); do
   if curl -sf http://localhost:5000/api/nodo-info >/dev/null 2>&1; then
     info "Backend listo en http://localhost:5000 (PID $BACKEND_PID)"
     break
   fi
-  if [[ $i -eq 20 ]]; then
-    error "El backend no respondió en 10 segundos. Revisa $LOG_FILE"
+  # Si el proceso ya murió, mostrar el log inmediatamente
+  if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+    error "El backend terminó inesperadamente. Últimas líneas del log:"
+    echo ""
+    tail -20 "$LOG_FILE" >&2
+    echo ""
+    error "Revisa el log completo en: $LOG_FILE"
+    exit 1
+  fi
+  if [[ $i -eq 30 ]]; then
+    error "El backend no respondió en 15 segundos. Últimas líneas del log:"
+    echo ""
+    tail -20 "$LOG_FILE" >&2
+    echo ""
+    error "Revisa el log completo en: $LOG_FILE"
     exit 1
   fi
   sleep 0.5
