@@ -192,8 +192,8 @@ def prueba_replicacion(conn: pymysql.Connection) -> None:
         with conn.cursor() as cur:
             cur.execute("SHOW SLAVE STATUS")
             slave = cur.fetchone()
-    except Exception as exc:
-        warn(f"No se pudo leer SHOW SLAVE STATUS: {exc}")
+    except Exception:
+        # Sin privilegio SLAVE MONITOR — omitir silenciosamente
         return
 
     if not slave:

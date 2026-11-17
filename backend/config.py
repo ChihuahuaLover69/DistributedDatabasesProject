@@ -12,14 +12,14 @@ NODES = [
         "port": 3306,
         "db": "sucursal_morelia",
         "user": "Compañero",
-        "password": "UnaContraseñaSegura123!",
+        "password": "UnaClaveSegura123!",
     },
     {
         "host": "100.119.128.65",
         "port": 3306,
         "db": "suc_patzcuaro",
         "user": "Compañero",
-        "password": "UnaContraseñaSegura123!",
+        "password": "UnaClaveSegura123!",
     },
 ]
 
