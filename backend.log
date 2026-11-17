@@ -5,16 +5,29 @@
  * Running on http://127.0.0.1:5000
  * Running on http://192.168.1.20:5000
 [33mPress CTRL+C to quit[0m
-127.0.0.1 - - [16/Nov/2026 20:58:13] "GET /api/nodo-info HTTP/1.1" 200 -
-127.0.0.1 - - [16/Nov/2026 20:58:14] "[36mGET / HTTP/1.1[0m" 304 -
-127.0.0.1 - - [16/Nov/2026 20:58:14] "[36mGET /style.css HTTP/1.1[0m" 304 -
-127.0.0.1 - - [16/Nov/2026 20:58:14] "[36mGET /app.js HTTP/1.1[0m" 304 -
-127.0.0.1 - - [16/Nov/2026 20:58:14] "GET /api/nodo-info HTTP/1.1" 200 -
-127.0.0.1 - - [16/Nov/2026 20:58:14] "GET /api/clientes HTTP/1.1" 200 -
-127.0.0.1 - - [16/Nov/2026 20:58:14] "GET /api/tailscale HTTP/1.1" 200 -
-127.0.0.1 - - [16/Nov/2026 20:58:26] "[36mGET / HTTP/1.1[0m" 304 -
-127.0.0.1 - - [16/Nov/2026 20:58:26] "[36mGET /style.css HTTP/1.1[0m" 304 -
-127.0.0.1 - - [16/Nov/2026 20:58:26] "[36mGET /app.js HTTP/1.1[0m" 304 -
-127.0.0.1 - - [16/Nov/2026 20:58:26] "GET /api/nodo-info HTTP/1.1" 200 -
-127.0.0.1 - - [16/Nov/2026 20:58:26] "GET /api/clientes HTTP/1.1" 200 -
-127.0.0.1 - - [16/Nov/2026 20:58:26] "GET /api/tailscale HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:09:47] "GET /api/nodo-info HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:09:47] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [16/Nov/2026 21:09:47] "[36mGET /style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [16/Nov/2026 21:09:47] "[36mGET /app.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [16/Nov/2026 21:09:47] "GET /api/nodo-info HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:09:48] "GET /api/clientes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:09:48] "GET /api/tailscale HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:09:52] "[36mGET / HTTP/1.1[0m" 304 -
+127.0.0.1 - - [16/Nov/2026 21:09:52] "[36mGET /style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [16/Nov/2026 21:09:52] "[36mGET /app.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [16/Nov/2026 21:09:53] "GET /api/nodo-info HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:09:53] "GET /api/clientes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:09:53] "GET /api/tailscale HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:09:55] "GET /api/tailscale HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:10:02] "GET /api/tailscale HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:10:17] "GET /api/tailscale HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:10:34] "GET /api/clientes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:10:34] "GET /api/clientes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:10:35] "GET /api/clientes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:10:36] "GET /api/clientes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:10:41] "GET /api/tailscale HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:10:55] "GET /api/clientes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:10:59] "GET /api/clientes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:11:00] "GET /api/clientes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:11:00] "GET /api/clientes HTTP/1.1" 200 -
+127.0.0.1 - - [16/Nov/2026 21:11:01] "GET /api/clientes HTTP/1.1" 200 -
