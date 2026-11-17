@@ -3,8 +3,13 @@ routes/clientes.py — CRUD de Clientes con enrutamiento distribuido.
 
 Reglas de negocio:
   - POST  → solo al nodo local (sucursal que registra)
-  - PUT/DELETE → nodo propietario del ID
+  - PUT/DELETE → nodo propietario del ID, con fallback a búsqueda global
   - GET (lista/buscar) → todos los nodos en paralelo
+  - GET por RFC → todos los nodos (el RFC es único globalmente)
+
+Bug fix: get_node_for_id fallaba con IDs fuera del rango esperado (ej. cuando
+  AUTO_INCREMENT no estaba configurado correctamente). Se agrega un fallback
+  que busca en todos los nodos antes de devolver 404.
 """
 
 from flask import Blueprint, jsonify, request
@@ -13,6 +18,7 @@ from config import LOCAL_NODE_INDEX, NODES, get_node_range
 from db import (
     execute_on_all_nodes_parallel,
     execute_on_node,
+    get_all_nodes,
     get_local_node,
     get_node_for_id,
     get_node_index_for_id,
@@ -27,6 +33,32 @@ def _ok(data, node_index=None):
 
 def _err(msg, status=400, node_index=None):
     return jsonify({"data": None, "error": msg, "node_index": node_index}), status
+
+
+# ── Búsqueda en todos los nodos por ID (fallback robusto) ─────────────────────
+
+def _buscar_cliente_por_id(client_id: int) -> tuple[dict | None, int]:
+    """
+    Busca un cliente por ID en TODOS los nodos.
+    Retorna (fila_dict, node_index) o (None, -1) si no se encuentra.
+
+    Se usa como fallback cuando get_node_for_id apunta al nodo incorrecto,
+    lo que puede suceder si el AUTO_INCREMENT no estaba configurado correctamente
+    al momento de insertar el registro.
+    """
+    for i, node in enumerate(get_all_nodes()):
+        try:
+            rows = execute_on_node(
+                node,
+                "SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC "
+                "FROM Clientes WHERE Id = %s",
+                (client_id,),
+            )
+            if rows:
+                return rows[0], i
+        except Exception:
+            continue
+    return None, -1
 
 
 # ── Info del nodo local ────────────────────────────────────────────────────────
@@ -101,24 +133,52 @@ def buscar_clientes():
     return _ok(rows)
 
 
-# ── Obtener uno ────────────────────────────────────────────────────────────────
+# ── Buscar por RFC (identificador único global) ───────────────────────────────
+
+@bp_clientes.get("/api/clientes/rfc/<string:rfc>")
+def obtener_cliente_por_rfc(rfc: str):
+    """Busca un cliente por RFC en todos los nodos. El RFC es único globalmente."""
+    rfc = rfc.strip().upper()
+    rows = execute_on_all_nodes_parallel(
+        "SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC "
+        "FROM Clientes WHERE RFC = %s",
+        (rfc,),
+    )
+    if not rows:
+        return _err(f"Cliente con RFC '{rfc}' no encontrado.", 404)
+    row = rows[0]
+    return _ok(row, row.get("node_index"))
+
+
+# ── Obtener uno por ID ─────────────────────────────────────────────────────────
 
 @bp_clientes.get("/api/clientes/<int:client_id>")
 def obtener_cliente(client_id: int):
+    """
+    Obtiene un cliente por ID.
+    Primero intenta en el nodo esperado por rango; si no lo encuentra,
+    busca en todos los nodos (fallback para IDs mal asignados por AUTO_INCREMENT).
+    """
+    # Intentar primero en el nodo que debería tener este ID según el rango
     try:
         node = get_node_for_id(client_id)
         node_index = get_node_index_for_id(client_id)
-    except ValueError as e:
-        return _err(str(e), 404)
+        rows = execute_on_node(
+            node,
+            "SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC FROM Clientes WHERE Id = %s",
+            (client_id,),
+        )
+        if rows:
+            row = rows[0]
+            row["node_index"] = node_index
+            return _ok(row, node_index)
+    except (ValueError, Exception):
+        pass
 
-    rows = execute_on_node(
-        node,
-        "SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC FROM Clientes WHERE Id = %s",
-        (client_id,),
-    )
-    if not rows:
-        return _err("Cliente no encontrado.", 404, node_index)
-    row = rows[0]
+    # Fallback: buscar en todos los nodos
+    row, node_index = _buscar_cliente_por_id(client_id)
+    if row is None:
+        return _err("Cliente no encontrado.", 404)
     row["node_index"] = node_index
     return _ok(row, node_index)
 
@@ -166,11 +226,29 @@ def actualizar_cliente(client_id: int):
     if not nombre or not ap_pat or not rfc:
         return _err("Nombre, ApellidoPaterno y RFC son obligatorios.")
 
+    # Encontrar el nodo correcto con fallback a búsqueda global
+    node = None
+    node_index = -1
     try:
         node = get_node_for_id(client_id)
         node_index = get_node_index_for_id(client_id)
-    except ValueError as e:
-        return _err(str(e), 404)
+        # Verificar que el cliente realmente está en ese nodo
+        rows = execute_on_node(
+            node,
+            "SELECT Id FROM Clientes WHERE Id = %s",
+            (client_id,),
+        )
+        if not rows:
+            node = None  # no está ahí — forzar fallback
+    except (ValueError, Exception):
+        node = None
+
+    if node is None:
+        # Fallback: buscar en todos los nodos
+        _, node_index = _buscar_cliente_por_id(client_id)
+        if node_index == -1:
+            return _err("Cliente no encontrado.", 404)
+        node = NODES[node_index]
 
     try:
         affected = execute_on_node(
@@ -194,14 +272,29 @@ def actualizar_cliente(client_id: int):
 
 @bp_clientes.delete("/api/clientes/<int:client_id>")
 def eliminar_cliente(client_id: int):
+    # Encontrar el nodo correcto con fallback a búsqueda global
+    node = None
+    node_index = -1
     try:
         node = get_node_for_id(client_id)
         node_index = get_node_index_for_id(client_id)
-    except ValueError as e:
-        return _err(str(e), 404)
+        rows = execute_on_node(
+            node,
+            "SELECT Id FROM Clientes WHERE Id = %s",
+            (client_id,),
+        )
+        if not rows:
+            node = None
+    except (ValueError, Exception):
+        node = None
+
+    if node is None:
+        _, node_index = _buscar_cliente_por_id(client_id)
+        if node_index == -1:
+            return _err("Cliente no encontrado.", 404)
+        node = NODES[node_index]
 
     try:
-        # Primero eliminar direcciones (cascada manual por si FK no está en ON DELETE CASCADE)
         execute_on_node(node, "DELETE FROM Direcciones WHERE IdCliente = %s", (client_id,), fetch=False)
         affected = execute_on_node(node, "DELETE FROM Clientes WHERE Id = %s", (client_id,), fetch=False)
     except Exception as exc:
