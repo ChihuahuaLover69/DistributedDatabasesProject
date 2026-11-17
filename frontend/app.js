@@ -476,9 +476,28 @@ function esc(str) {
     .replace(/"/g, "&quot;");
 }
 
-/** Valida RFC mexicano: 12 o 13 caracteres */
+/**
+ * Valida RFC mexicano según el formato del SAT:
+ *   Personas físicas  (13 car): 4 letras  + 6 dígitos AAMMDD + 3 car homoclave
+ *   Personas morales  (12 car): 3 letras  + 6 dígitos AAMMDD + 3 car homoclave
+ *
+ * - Las primeras letras pueden incluir Ñ y & (personas morales)
+ * - Los 6 dígitos deben formar una fecha válida (AA MM DD)
+ * - La homoclave son 2 alfanuméricos + 1 dígito verificador alfanumérico
+ */
 function validarRFC(rfc) {
-  return /^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3}([A-Z0-9])?$/i.test(rfc);
+  if (!rfc) return false;
+  rfc = rfc.toUpperCase().trim();
+
+  // Patrón base del SAT
+  const patron = /^([A-ZÑ&]{3,4})(\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])([A-Z0-9]{2})([0-9A])$/;
+  if (!patron.test(rfc)) return false;
+
+  // Rechazar RFCs genéricos del SAT usados para operaciones con el público en general
+  const genericos = ['XAXX010101000', 'XEXX010101000'];
+  if (genericos.includes(rfc)) return false;
+
+  return true;
 }
 
 /** Abre un modal */
