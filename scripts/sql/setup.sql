@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS Clientes (
     ApellidoPaterno VARCHAR(80)     NOT NULL,
     ApellidoMaterno VARCHAR(80)     DEFAULT NULL,
     RFC             VARCHAR(13)     NOT NULL,
+    IdDireccion     BIGINT UNSIGNED  DEFAULT NULL   COMMENT 'Referencia opcional a dirección principal',
     PRIMARY KEY (Id),
     UNIQUE KEY uq_rfc (RFC)
 ) ENGINE=InnoDB

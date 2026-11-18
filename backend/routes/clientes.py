@@ -7,9 +7,14 @@ Reglas de negocio:
   - GET (lista/buscar) → todos los nodos en paralelo
   - GET por RFC → todos los nodos (el RFC es único globalmente)
 
-Bug fix: get_node_for_id fallaba con IDs fuera del rango esperado (ej. cuando
-  AUTO_INCREMENT no estaba configurado correctamente). Se agrega un fallback
-  que busca en todos los nodos antes de devolver 404.
+Relación cliente-dirección:
+  - Al crear un cliente se puede pasar IdDireccion (opcional) para asociarlo
+    a una dirección existente en el nodo local.
+  - La columna IdDireccion en Clientes es NULLABLE.
+
+Validación RFC:
+  - Se acepta cualquier cadena no vacía; la validación de formato se realiza
+    opcionalmente en el frontend pero nunca es un bloqueo del backend.
 """
 
 from flask import Blueprint, jsonify, request
@@ -41,21 +46,17 @@ def _buscar_cliente_por_id(client_id: int) -> tuple[dict | None, int]:
     """
     Busca un cliente por ID en TODOS los nodos.
     Retorna (fila_dict, node_index) o (None, -1) si no se encuentra.
-
-    Se usa como fallback cuando get_node_for_id apunta al nodo incorrecto,
-    lo que puede suceder si el AUTO_INCREMENT no estaba configurado correctamente
-    al momento de insertar el registro.
     """
-    for i, node in enumerate(get_all_nodes()):
+    for i, nodo in enumerate(get_all_nodes()):
         try:
-            rows = execute_on_node(
-                node,
-                "SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC "
+            filas = execute_on_node(
+                nodo,
+                "SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC, IdDireccion "
                 "FROM Clientes WHERE Id = %s",
                 (client_id,),
             )
-            if rows:
-                return rows[0], i
+            if filas:
+                return filas[0], i
         except Exception:
             continue
     return None, -1
@@ -66,10 +67,10 @@ def _buscar_cliente_por_id(client_id: int) -> tuple[dict | None, int]:
 @bp_clientes.get("/api/nodo-info")
 def nodo_info():
     id_min, id_max = get_node_range(LOCAL_NODE_INDEX)
-    node = NODES[LOCAL_NODE_INDEX]
+    nodo = NODES[LOCAL_NODE_INDEX]
     return _ok({
         "node_index": LOCAL_NODE_INDEX,
-        "host": node["host"],
+        "host": nodo["host"],
         "id_min": id_min,
         "id_max": id_max,
         "total_nodos": len(NODES),
@@ -80,10 +81,11 @@ def nodo_info():
 
 @bp_clientes.get("/api/clientes")
 def listar_clientes():
-    rows = execute_on_all_nodes_parallel(
-        "SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC FROM Clientes ORDER BY Id"
+    filas = execute_on_all_nodes_parallel(
+        "SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC, IdDireccion "
+        "FROM Clientes ORDER BY Id"
     )
-    return _ok(rows)
+    return _ok(filas)
 
 
 # ── Buscar ─────────────────────────────────────────────────────────────────────
@@ -99,24 +101,24 @@ def buscar_clientes():
     like = f"%{q}%"
 
     if campo == "nombre":
-        query = """
-            SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC
+        consulta = """
+            SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC, IdDireccion
             FROM Clientes
             WHERE CONCAT(Nombre, ' ', ApellidoPaterno, ' ', IFNULL(ApellidoMaterno,'')) LIKE %s
             ORDER BY Id
         """
-        params = (like,)
+        parametros = (like,)
     elif campo == "rfc":
-        query = """
-            SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC
+        consulta = """
+            SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC, IdDireccion
             FROM Clientes
             WHERE RFC LIKE %s
             ORDER BY Id
         """
-        params = (like,)
+        parametros = (like,)
     elif campo == "domicilio":
-        query = """
-            SELECT DISTINCT c.Id, c.Nombre, c.ApellidoPaterno, c.ApellidoMaterno, c.RFC
+        consulta = """
+            SELECT DISTINCT c.Id, c.Nombre, c.ApellidoPaterno, c.ApellidoMaterno, c.RFC, c.IdDireccion
             FROM Clientes c
             JOIN Direcciones d ON d.IdCliente = c.Id
             WHERE d.Calle LIKE %s
@@ -125,29 +127,29 @@ def buscar_clientes():
                OR d.CP LIKE %s
             ORDER BY c.Id
         """
-        params = (like, like, like, like)
+        parametros = (like, like, like, like)
     else:
         return _err("Campo de búsqueda inválido. Use: nombre, rfc, domicilio.")
 
-    rows = execute_on_all_nodes_parallel(query, params)
-    return _ok(rows)
+    filas = execute_on_all_nodes_parallel(consulta, parametros)
+    return _ok(filas)
 
 
-# ── Buscar por RFC (identificador único global) ───────────────────────────────
+# ── Buscar por RFC ─────────────────────────────────────────────────────────────
 
 @bp_clientes.get("/api/clientes/rfc/<string:rfc>")
 def obtener_cliente_por_rfc(rfc: str):
     """Busca un cliente por RFC en todos los nodos. El RFC es único globalmente."""
     rfc = rfc.strip().upper()
-    rows = execute_on_all_nodes_parallel(
-        "SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC "
+    filas = execute_on_all_nodes_parallel(
+        "SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC, IdDireccion "
         "FROM Clientes WHERE RFC = %s",
         (rfc,),
     )
-    if not rows:
+    if not filas:
         return _err(f"Cliente con RFC '{rfc}' no encontrado.", 404)
-    row = rows[0]
-    return _ok(row, row.get("node_index"))
+    fila = filas[0]
+    return _ok(fila, fila.get("node_index"))
 
 
 # ── Obtener uno por ID ─────────────────────────────────────────────────────────
@@ -156,114 +158,162 @@ def obtener_cliente_por_rfc(rfc: str):
 def obtener_cliente(client_id: int):
     """
     Obtiene un cliente por ID.
-    Primero intenta en el nodo esperado por rango; si no lo encuentra,
-    busca en todos los nodos (fallback para IDs mal asignados por AUTO_INCREMENT).
+    Primero intenta en el nodo esperado por rango; si no, busca en todos.
     """
-    # Intentar primero en el nodo que debería tener este ID según el rango
     try:
-        node = get_node_for_id(client_id)
+        nodo = get_node_for_id(client_id)
         node_index = get_node_index_for_id(client_id)
-        rows = execute_on_node(
-            node,
-            "SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC FROM Clientes WHERE Id = %s",
+        filas = execute_on_node(
+            nodo,
+            "SELECT Id, Nombre, ApellidoPaterno, ApellidoMaterno, RFC, IdDireccion "
+            "FROM Clientes WHERE Id = %s",
             (client_id,),
         )
-        if rows:
-            row = rows[0]
-            row["node_index"] = node_index
-            return _ok(row, node_index)
+        if filas:
+            fila = filas[0]
+            fila["node_index"] = node_index
+            return _ok(fila, node_index)
     except (ValueError, Exception):
         pass
 
-    # Fallback: buscar en todos los nodos
-    row, node_index = _buscar_cliente_por_id(client_id)
-    if row is None:
+    fila, node_index = _buscar_cliente_por_id(client_id)
+    if fila is None:
         return _err("Cliente no encontrado.", 404)
-    row["node_index"] = node_index
-    return _ok(row, node_index)
+    fila["node_index"] = node_index
+    return _ok(fila, node_index)
 
 
 # ── Crear (solo nodo local) ────────────────────────────────────────────────────
 
 @bp_clientes.post("/api/clientes")
 def crear_cliente():
-    data = request.get_json(silent=True) or {}
-    nombre = data.get("Nombre", "").strip()
-    ap_pat = data.get("ApellidoPaterno", "").strip()
-    ap_mat = data.get("ApellidoMaterno", "").strip() or None
-    rfc = data.get("RFC", "").strip().upper()
+    datos = request.get_json(silent=True) or {}
+    nombre  = datos.get("Nombre",          "").strip()
+    ap_pat  = datos.get("ApellidoPaterno",  "").strip()
+    ap_mat  = datos.get("ApellidoMaterno",  "").strip() or None
+    rfc     = datos.get("RFC",             "").strip().upper()
+    id_dir  = datos.get("IdDireccion")  # puede ser None
 
     if not nombre or not ap_pat or not rfc:
         return _err("Nombre, ApellidoPaterno y RFC son obligatorios.")
 
-    node = get_local_node()
+    # Normalizar IdDireccion
+    if id_dir is not None:
+        try:
+            id_dir = int(id_dir)
+        except (ValueError, TypeError):
+            return _err("IdDireccion debe ser un número entero.")
+
+    nodo = get_local_node()
+
+    # Verificar que la dirección existe en el nodo local si se proporcionó
+    if id_dir is not None:
+        filas = execute_on_node(nodo, "SELECT Id FROM Direcciones WHERE Id = %s", (id_dir,))
+        if not filas:
+            return _err(f"La dirección con ID {id_dir} no existe en el nodo local.", 404)
+
     try:
-        new_id = execute_on_node(
-            node,
-            "INSERT INTO Clientes (Nombre, ApellidoPaterno, ApellidoMaterno, RFC) VALUES (%s, %s, %s, %s)",
-            (nombre, ap_pat, ap_mat, rfc),
+        nuevo_id = execute_on_node(
+            nodo,
+            "INSERT INTO Clientes (Nombre, ApellidoPaterno, ApellidoMaterno, RFC, IdDireccion) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (nombre, ap_pat, ap_mat, rfc, id_dir),
             fetch=False,
         )
     except Exception as exc:
         msg = str(exc)
-        if "Duplicate entry" in msg and "RFC" in msg:
+        if "Unknown column" in msg and "IdDireccion" in msg:
+            # La columna aún no existe en la BD — reintentar sin ella
+            try:
+                nuevo_id = execute_on_node(
+                    nodo,
+                    "INSERT INTO Clientes (Nombre, ApellidoPaterno, ApellidoMaterno, RFC) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (nombre, ap_pat, ap_mat, rfc),
+                    fetch=False,
+                )
+            except Exception as exc2:
+                msg2 = str(exc2)
+                if "Duplicate entry" in msg2 and "RFC" in msg2:
+                    return _err("El RFC ya está registrado.", 409, LOCAL_NODE_INDEX)
+                return _err(f"Error al insertar: {msg2}", 500, LOCAL_NODE_INDEX)
+        elif "Duplicate entry" in msg and "RFC" in msg:
             return _err("El RFC ya está registrado.", 409, LOCAL_NODE_INDEX)
-        return _err(f"Error al insertar: {msg}", 500, LOCAL_NODE_INDEX)
+        else:
+            return _err(f"Error al insertar: {msg}", 500, LOCAL_NODE_INDEX)
 
-    return _ok({"Id": new_id}, LOCAL_NODE_INDEX), 201
+    return _ok({"Id": nuevo_id}, LOCAL_NODE_INDEX), 201
 
 
 # ── Actualizar ─────────────────────────────────────────────────────────────────
 
 @bp_clientes.put("/api/clientes/<int:client_id>")
 def actualizar_cliente(client_id: int):
-    data = request.get_json(silent=True) or {}
-    nombre = data.get("Nombre", "").strip()
-    ap_pat = data.get("ApellidoPaterno", "").strip()
-    ap_mat = data.get("ApellidoMaterno", "").strip() or None
-    rfc = data.get("RFC", "").strip().upper()
+    datos = request.get_json(silent=True) or {}
+    nombre  = datos.get("Nombre",          "").strip()
+    ap_pat  = datos.get("ApellidoPaterno",  "").strip()
+    ap_mat  = datos.get("ApellidoMaterno",  "").strip() or None
+    rfc     = datos.get("RFC",             "").strip().upper()
+    id_dir  = datos.get("IdDireccion")
 
     if not nombre or not ap_pat or not rfc:
         return _err("Nombre, ApellidoPaterno y RFC son obligatorios.")
 
+    if id_dir is not None:
+        try:
+            id_dir = int(id_dir)
+        except (ValueError, TypeError):
+            return _err("IdDireccion debe ser un número entero.")
+
     # Encontrar el nodo correcto con fallback a búsqueda global
-    node = None
+    nodo = None
     node_index = -1
     try:
-        node = get_node_for_id(client_id)
+        nodo = get_node_for_id(client_id)
         node_index = get_node_index_for_id(client_id)
-        # Verificar que el cliente realmente está en ese nodo
-        rows = execute_on_node(
-            node,
-            "SELECT Id FROM Clientes WHERE Id = %s",
-            (client_id,),
-        )
-        if not rows:
-            node = None  # no está ahí — forzar fallback
+        filas = execute_on_node(nodo, "SELECT Id FROM Clientes WHERE Id = %s", (client_id,))
+        if not filas:
+            nodo = None
     except (ValueError, Exception):
-        node = None
+        nodo = None
 
-    if node is None:
-        # Fallback: buscar en todos los nodos
+    if nodo is None:
         _, node_index = _buscar_cliente_por_id(client_id)
         if node_index == -1:
             return _err("Cliente no encontrado.", 404)
-        node = NODES[node_index]
+        nodo = NODES[node_index]
 
     try:
-        affected = execute_on_node(
-            node,
-            "UPDATE Clientes SET Nombre=%s, ApellidoPaterno=%s, ApellidoMaterno=%s, RFC=%s WHERE Id=%s",
-            (nombre, ap_pat, ap_mat, rfc, client_id),
+        afectadas = execute_on_node(
+            nodo,
+            "UPDATE Clientes SET Nombre=%s, ApellidoPaterno=%s, ApellidoMaterno=%s, "
+            "RFC=%s, IdDireccion=%s WHERE Id=%s",
+            (nombre, ap_pat, ap_mat, rfc, id_dir, client_id),
             fetch=False,
         )
     except Exception as exc:
         msg = str(exc)
-        if "Duplicate entry" in msg and "RFC" in msg:
+        if "Unknown column" in msg and "IdDireccion" in msg:
+            # Fallback si la columna no existe aún
+            try:
+                afectadas = execute_on_node(
+                    nodo,
+                    "UPDATE Clientes SET Nombre=%s, ApellidoPaterno=%s, "
+                    "ApellidoMaterno=%s, RFC=%s WHERE Id=%s",
+                    (nombre, ap_pat, ap_mat, rfc, client_id),
+                    fetch=False,
+                )
+            except Exception as exc2:
+                msg2 = str(exc2)
+                if "Duplicate entry" in msg2 and "RFC" in msg2:
+                    return _err("El RFC ya está registrado.", 409, node_index)
+                return _err(f"Error al actualizar: {msg2}", 500, node_index)
+        elif "Duplicate entry" in msg and "RFC" in msg:
             return _err("El RFC ya está registrado.", 409, node_index)
-        return _err(f"Error al actualizar: {msg}", 500, node_index)
+        else:
+            return _err(f"Error al actualizar: {msg}", 500, node_index)
 
-    if not affected:
+    if not afectadas:
         return _err("Cliente no encontrado.", 404, node_index)
     return _ok({"Id": client_id}, node_index)
 
@@ -272,34 +322,29 @@ def actualizar_cliente(client_id: int):
 
 @bp_clientes.delete("/api/clientes/<int:client_id>")
 def eliminar_cliente(client_id: int):
-    # Encontrar el nodo correcto con fallback a búsqueda global
-    node = None
+    nodo = None
     node_index = -1
     try:
-        node = get_node_for_id(client_id)
+        nodo = get_node_for_id(client_id)
         node_index = get_node_index_for_id(client_id)
-        rows = execute_on_node(
-            node,
-            "SELECT Id FROM Clientes WHERE Id = %s",
-            (client_id,),
-        )
-        if not rows:
-            node = None
+        filas = execute_on_node(nodo, "SELECT Id FROM Clientes WHERE Id = %s", (client_id,))
+        if not filas:
+            nodo = None
     except (ValueError, Exception):
-        node = None
+        nodo = None
 
-    if node is None:
+    if nodo is None:
         _, node_index = _buscar_cliente_por_id(client_id)
         if node_index == -1:
             return _err("Cliente no encontrado.", 404)
-        node = NODES[node_index]
+        nodo = NODES[node_index]
 
     try:
-        execute_on_node(node, "DELETE FROM Direcciones WHERE IdCliente = %s", (client_id,), fetch=False)
-        affected = execute_on_node(node, "DELETE FROM Clientes WHERE Id = %s", (client_id,), fetch=False)
+        execute_on_node(nodo, "DELETE FROM Direcciones WHERE IdCliente = %s", (client_id,), fetch=False)
+        afectadas = execute_on_node(nodo, "DELETE FROM Clientes WHERE Id = %s", (client_id,), fetch=False)
     except Exception as exc:
         return _err(f"Error al eliminar: {exc}", 500, node_index)
 
-    if not affected:
+    if not afectadas:
         return _err("Cliente no encontrado.", 404, node_index)
     return _ok({"eliminado": client_id}, node_index)

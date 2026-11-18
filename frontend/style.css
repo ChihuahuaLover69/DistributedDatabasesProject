@@ -384,3 +384,20 @@ form { padding: 0.75rem 1.25rem; }
 .ts-node-badge--online  { background: #dcfce7; color: #15803d; }
 .ts-node-badge--offline { background: #fee2e2; color: #b91c1c; }
 .ts-node-badge--self    { background: #dbeafe; color: #1d4ed8; }
+
+/* ─── Tabla dinámica / CRUD ───────────────────────────────────────────────────── */
+.tabla-card-actions { display: flex; gap: 0.4rem; align-items: center; }
+
+/* Muted text helper */
+.muted { color: var(--muted); font-size: 12px; }
+
+/* Badge PK en formulario de registro dinámico */
+.badge-pk {
+  display: inline-block; padding: 0.05rem 0.4rem;
+  background: #dbeafe; color: #1d4ed8;
+  border-radius: 99px; font-size: 10px; font-weight: 700;
+  vertical-align: middle; margin-left: 0.3rem;
+}
+
+/* Campo readonly en modal de registro */
+input[readonly] { cursor: not-allowed; }
