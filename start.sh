@@ -24,10 +24,39 @@ warn()    { echo -e "${YELLOW}[!]${RESET} $*"; }
 error()   { echo -e "${RED}[✘]${RESET} $*" >&2; }
 
 # ── Verificar Python ───────────────────────────────────────────────────────────
-if ! command -v /home/kiqueluv/git/toñoproyecto/bin/python3 &>/dev/null; then
-  error "python3 del venv no encontrado. Instala Python 3.10+ para continuar."
+# Búsqueda del intérprete (portable, sin rutas absolutas de nadie):
+#   1. PYTHON_BIN del entorno (si el usuario lo define)
+#   2. Venv dentro del proyecto: .venv/, venv/, env/, o cualquier carpeta con pyvenv.cfg
+#   3. VENV_DIR (ruta explícita a un venv)
+#   4. python3 del sistema
+if [[ -z "${PYTHON_BIN:-}" ]]; then
+  for candidato in "$SCRIPT_DIR/.venv/bin/python3" "$SCRIPT_DIR/venv/bin/python3" "$SCRIPT_DIR/env/bin/python3"; do
+    if [[ -x "$candidato" ]]; then PYTHON_BIN="$candidato"; break; fi
+  done
+fi
+if [[ -z "${PYTHON_BIN:-}" ]]; then
+  for cfg in "$SCRIPT_DIR"/*/pyvenv.cfg; do
+    [[ -f "$cfg" ]] || continue
+    candidato="$(dirname "$cfg")/bin/python3"
+    if [[ -x "$candidato" ]]; then PYTHON_BIN="$candidato"; break; fi
+  done
+fi
+if [[ -z "${PYTHON_BIN:-}" && -n "${VENV_DIR:-}" && -x "${VENV_DIR%/}/bin/python3" ]]; then
+  PYTHON_BIN="${VENV_DIR%/}/bin/python3"
+fi
+if [[ -z "${PYTHON_BIN:-}" ]] && command -v python3 &>/dev/null; then
+  PYTHON_BIN="$(command -v python3)"
+fi
+if [[ -z "${PYTHON_BIN:-}" ]] || ! "$PYTHON_BIN" --version &>/dev/null; then
+  error "No se encontró python3. Instala Python 3.10+ o crea un venv en el proyecto."
+  echo -e "  ${YELLOW}Alternativa:${RESET} VENV_DIR=/ruta/a/tu/venv bash start.sh"
   exit 1
 fi
+if ! "$PYTHON_BIN" -c 'import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)' &>/dev/null; then
+  error "El intérprete '$PYTHON_BIN' no es Python 3.10+."
+  exit 1
+fi
+info "Intérprete: $PYTHON_BIN ($("$PYTHON_BIN" --version 2>&1))"
 
 # ── Verificar que existe el archivo .env ──────────────────────────────────────
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -45,13 +74,13 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 # ── Verificar que las dependencias estén instaladas ────────────────────────────
-if ! /home/kiqueluv/git/toñoproyecto/bin/python3 -c "import flask, pymysql, flask_cors" &>/dev/null; then
+if ! "$PYTHON_BIN" -c "import flask, pymysql, flask_cors" &>/dev/null; then
   warn "Dependencias no encontradas. Instalando desde requirements.txt..."
-  /home/kiqueluv/git/toñoproyecto/bin/python3 -m pip install -r "$BACKEND_DIR/requirements.txt" --quiet
+  "$PYTHON_BIN" -m pip install -r "$BACKEND_DIR/requirements.txt" --quiet
 fi
 
 # ── Verificar que la configuración es válida antes de arrancar ────────────────
-if ! /home/kiqueluv/git/toñoproyecto/bin/python3 -c "
+if ! "$PYTHON_BIN" -c "
 import sys
 sys.path.insert(0, '$BACKEND_DIR')
 try:
@@ -82,7 +111,7 @@ fi
 # ── Arrancar backend en segundo plano ─────────────────────────────────────────
 info "Iniciando backend Flask..."
 cd "$BACKEND_DIR"
-setsid bash -c "cd '$BACKEND_DIR' && exec /home/kiqueluv/git/toñoproyecto/bin/python3 app.py >> '$LOG_FILE' 2>&1" &
+setsid bash -c "cd '$BACKEND_DIR' && exec "$PYTHON_BIN" app.py >> '$LOG_FILE' 2>&1" &
 BACKEND_PID=$!
 echo "$BACKEND_PID" > "$PID_FILE"
 
