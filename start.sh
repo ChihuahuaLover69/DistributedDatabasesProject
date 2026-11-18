@@ -24,8 +24,8 @@ warn()    { echo -e "${YELLOW}[!]${RESET} $*"; }
 error()   { echo -e "${RED}[✘]${RESET} $*" >&2; }
 
 # ── Verificar Python ───────────────────────────────────────────────────────────
-if ! command -v python3 &>/dev/null; then
-  error "python3 no encontrado. Instala Python 3.10+ para continuar."
+if ! command -v /home/kiqueluv/git/toñoproyecto/bin/python3 &>/dev/null; then
+  error "python3 del venv no encontrado. Instala Python 3.10+ para continuar."
   exit 1
 fi
 
@@ -45,13 +45,13 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 # ── Verificar que las dependencias estén instaladas ────────────────────────────
-if ! python3 -c "import flask, pymysql, flask_cors" &>/dev/null; then
+if ! /home/kiqueluv/git/toñoproyecto/bin/python3 -c "import flask, pymysql, flask_cors" &>/dev/null; then
   warn "Dependencias no encontradas. Instalando desde requirements.txt..."
-  pip install -r "$BACKEND_DIR/requirements.txt" --quiet
+  /home/kiqueluv/git/toñoproyecto/bin/python3 -m pip install -r "$BACKEND_DIR/requirements.txt" --quiet
 fi
 
 # ── Verificar que la configuración es válida antes de arrancar ────────────────
-if ! python3 -c "
+if ! /home/kiqueluv/git/toñoproyecto/bin/python3 -c "
 import sys
 sys.path.insert(0, '$BACKEND_DIR')
 try:
@@ -82,7 +82,7 @@ fi
 # ── Arrancar backend en segundo plano ─────────────────────────────────────────
 info "Iniciando backend Flask..."
 cd "$BACKEND_DIR"
-setsid nohup python3 app.py > "$LOG_FILE" 2>&1 &
+setsid bash -c "cd '$BACKEND_DIR' && exec /home/kiqueluv/git/toñoproyecto/bin/python3 app.py >> '$LOG_FILE' 2>&1" &
 BACKEND_PID=$!
 echo "$BACKEND_PID" > "$PID_FILE"
 

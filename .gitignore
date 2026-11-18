@@ -49,3 +49,8 @@ node_modules/
 
 # ── Archivos del sistema operativo ───────────────────────────────────────────
 desktop.ini
+
+# ── Entorno virtual (la_toño_prueba) ─────────────────────────────────────────
+la_toño_prueba/
+toñoproyecto/
+*.egg-link
